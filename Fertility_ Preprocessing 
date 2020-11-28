@@ -1,0 +1,86 @@
+class PreProcessing(pd.DataFrame):
+
+
+    ''' class for carrying out all the data preprocessing tasks found in a pandas dataframe'''
+
+    def __init__(self, df):
+        super(PreProcessing, self).__init__()
+        ''' function inheriting all the methods and properties found in a pandas dataframe'''
+#Input: df
+    #Dataframe
+    
+#Return:
+    #Output: Integer
+        self.df = df.copy()
+        #self.cat = pd.Categorical(self.df)
+
+    def get_categorical(self):
+        '''This method gets the categorical columns from the dataframe into a list'''
+        #target_col = ['Churn']
+        self.cat_cols = self.df.nunique()[self.df.nunique() < 6].keys().tolist() 
+        # getting the target columns from the dataframe with less than 6 unique values into a list
+        #self.cat_cols = [x for x in self.cat_cols if x not in target_col]
+        self.num_cols = [x for x in self.df.columns if x not in self.cat_cols]
+        #getting the numerical columns in the dataframe(not required for this project)
+        self.bin_cols = self.df.nunique()[self.df.nunique() == 2].keys().tolist()
+        #getting the columns with two unique values in the dataframe
+        self.multi_cols = [x for x in self.cat_cols if x not in self.bin_cols]
+        #getting all other columns in the categorical dataset which have less than 6 and not == 2 unique values
+        return self.multi_cols, self.bin_cols
+
+
+    def Label_Encoder(self):
+        '''This method uses label encoder to convert the categorical values in multi_cols into numerical data types'''
+        le = LabelEncoder()
+        #print(le.fit_transform(self.df['Gender']))
+        for col in self.multi_cols:
+            self.df[col] = le.fit_transform(self.df[col])
+
+    def OHE(self):
+        ''' This method uses one hot encoder to convert the categorical values in bin_cols into numerical data types'''
+        self.df = pd.get_dummies(self.df, columns = self.bin_cols)
+
+    def return_df(self):
+        '''This method returns the new dataframe after conversion to numerical data types'''
+        return self.df
+
+    def Encode_OHE(self):
+        '''This method encodes the categorical columns using OHE and LE and returns new dataframe'''
+        self.get_categorical()
+        self.Label_Encoder()
+        self.OHE()
+        return self.return_df()
+    
+    
+class Embedding:
+    
+    def __init__(self, lis, n_dim, column_name):
+        # initialising the class to use embedding layer to encode the categorical columns not converted by OHE and LE
+        self.lis = lis
+        self.n_dim = n_dim
+        self.le = LabelEncoder()
+        self.column_name = column_name
+        self.sc = StandardScaler()
+        
+    def create(self):
+        # a method that creates the embedding layers in right format
+        encode = self.le.fit(self.lis)
+        keys = encode.classes_.tolist()
+        values = sorted(encode.transform(keys).tolist())
+        lis_dict = dict(zip(keys, values))
+        embeds = nn.Embedding(len(keys), self.n_dim)
+        
+        columns = []
+        for i in range(self.n_dim):
+            columns.append('{}{}{}'.format(self.column_name,'_', str(i)))
+            
+        df = pd.DataFrame()  
+        df_dict = {}
+        for key in self.lis:
+            x = embeds(torch.tensor([lis_dict[key]], dtype=torch.long)).detach().numpy().tolist()
+            for i in range(self.n_dim):
+                df_dict[columns[i]] = x[0][i]
+            df = df.append(df_dict, ignore_index = True)
+            #df = self.sc.fit_transform(df)
+
+        return df
